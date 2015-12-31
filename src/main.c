@@ -5,6 +5,7 @@
 #include <getopt.h>
 #include "hexfile.h"
 #include "spi.h"
+#include "main.h"
 
 // SPI Flash operations commands
 #define WREN 		0x06	// Set flash write enable latch
@@ -22,7 +23,7 @@
 #define ENDEBUG		0x86	// Enable HW debug features
 
 // Flash Status Register (FSR) bits
-#define FSR_ENDEBUG	(1 << 7)	// Initial value read from byte ENDEBUG 
+#define FSR_ENDEBUG	(1 << 7)	// Initial value read from byte ENDEBUG
 					// in flash IP
 #define FSR_STP		(1 << 6)	// Enable code execution start from
 					// protected flash area (page address
@@ -32,7 +33,6 @@
 #define FSR_INFEN	(1 << 3)	// Flash IP Enable
 #define FSR_RDISMB	(1 << 2)	// Flash MB readback protection enabled,
 					// active low
-
 
 static int spi_started = 0;
 
@@ -117,12 +117,21 @@ static int check_rdismb()
 	return (read_fsr() & FSR_RDISMB) ? 1 : 0;
 }
 
+#ifdef FTD2XX_LIB
+static void cmd_device(uint8_t port)
+#else  // FTD2XX_LIB
 static void cmd_device(uint8_t bus, uint8_t port)
+#endif // FTD2XX_LIB
 {
 	if (spi_started)
 		spi_end();
 
+
+	#ifdef FTD2XX_LIB
+	if (spi_begin(port) != 0) {
+	#else  // FTD2XX_LIB
 	if (spi_begin(bus, port) != 0) {
+	#endif // FTD2XX_LIB
 		fprintf(stderr, "problem accessing device\n");
 		exit(EXIT_FAILURE);
 	}
@@ -152,7 +161,7 @@ static void cmd_read_flash(const char *filename)
 		exit(EXIT_FAILURE);
 	}
 
-	f = fopen(filename, "w");
+	f = fopen(filename, "wb");
 	if (!f) {
 		fprintf(stderr, "can't open %s to write\n", filename);
 		exit(EXIT_FAILURE);
@@ -193,7 +202,7 @@ static void cmd_write_flash(const char *filename)
 		buffer[0] = PROGRAM;
 		buffer[1] = address >> 8;
 		buffer[2] = address & 0xff;
-		printf("writing %i bytes at 0x%04hx...\n", count, address);
+		printf("\rwriting %i bytes at 0x%04hx...\t\t", count, address);
 		if (!spi_transfer(buffer, count + 3)) {
 			fprintf(stderr, "SPI error\n");
 			fclose(fd);
@@ -298,7 +307,7 @@ static void cmd_read_ip(const char *filename)
 		exit(EXIT_FAILURE);
 	}
 
-	f = fopen(filename, "w");
+	f = fopen(filename, "wb");
 	if (!f) {
 		fprintf(stderr, "can't open %s to write\n", filename);
 		exit(EXIT_FAILURE);
@@ -322,7 +331,7 @@ static void cmd_write_ip(const char *filename)
 	buf[1] = 0x00; // address
 	buf[2] = 0x00;
 
-	f = fopen(filename, "r");
+	f = fopen(filename, "rb");
 	if (!f) {
 		fprintf(stderr, "can't open %s to read\n", filename);
 		exit(EXIT_FAILURE);
@@ -362,8 +371,13 @@ static void cmd_show_usage(const char *name)
 {
 	printf("Usage: %s [options]\n", name);
 	printf("Options:\n");
+	#ifdef FTD2XX_LIB
+	printf("  -d, --device ft0-ft9\n");
+	printf("        Choose which FTBB device to use\n");
+	#else  // FTD2XX_LIB
 	printf("  -d, --device <bus>-<port>\n");
 	printf("        Choose which USB device to use\n");
+	#endif // FTD2XX_LIB
 	printf("  -r, --read-flash <filename>\n");
 	printf("        Reads flash memory and write to filename\n");
 	printf("  -w, --write-flash <filename>\n");
@@ -405,45 +419,79 @@ int main(int argc, char *argv[])
 
 		c = getopt_long(argc, argv, "hd:r:w:cx", long_options,
 								NULL);
+		if (argc == 1) {
+			cmd_show_usage(argv[0]);
+			return EXIT_SUCCESS;
+		}
+
 		if (c == -1)
 			break;
 
 		switch (c) {
 		case 'd': // device
+			#ifdef FTD2XX_LIB
+			if (sscanf(optarg, "ft%hhu", &port) != 1) {
+				fprintf(stderr, "invalid portname \"%s\": use ft0 - ft9\n", optarg);
+			#else  // FTD2XX_LIB
 			if (sscanf(optarg, "%hhu-%hhu", &bus, &port) != 2) {
 				fprintf(stderr, "invalid USB device\n");
+			#endif // FTD2XX_LIB
 				return EXIT_FAILURE;
 			}
 
+			#ifdef FTD2XX_LIB
+			cmd_device(port);
+			#else  // FTD2XX_LIB
 			cmd_device(bus, port);
+			#endif // FTD2XX_LIB
 			break;
 		case 'r': // read flash
 			if (!spi_started)
+				#ifdef FTD2XX_LIB
+				cmd_device(0);
+				#else  // FTD2XX_LIB
 				cmd_device(0, 0);
+				#endif // FTD2XX_LIB
 
 			cmd_read_flash(optarg);
 			break;
 		case 'w': // write flash
 			if (!spi_started)
+				#ifdef FTD2XX_LIB
+				cmd_device(0);
+				#else  // FTD2XX_LIB
 				cmd_device(0, 0);
+				#endif // FTD2XX_LIB
 
 			cmd_write_flash(optarg);
 			break;
 		case 'c': // erase flash
 			if (!spi_started)
+				#ifdef FTD2XX_LIB
+				cmd_device(0);
+				#else  // FTD2XX_LIB
 				cmd_device(0, 0);
+				#endif // FTD2XX_LIB
 
 			cmd_erase_flash();
 			break;
 		case 'x': // lock flash
 			if (!spi_started)
+				#ifdef FTD2XX_LIB
+				cmd_device(0);
+				#else  // FTD2XX_LIB
 				cmd_device(0, 0);
+				#endif // FTD2XX_LIB
 
 			cmd_lock();
 			break;
 		case 1: // read/write fsr
 			if (!spi_started)
+				#ifdef FTD2XX_LIB
+				cmd_device(0);
+				#else  // FTD2XX_LIB
 				cmd_device(0, 0);
+				#endif // FTD2XX_LIB
 
 			if (optarg) {
 				char *check = NULL;
@@ -460,19 +508,31 @@ int main(int argc, char *argv[])
 			break;
 		case 2: // read info page
 			if (!spi_started)
+				#ifdef FTD2XX_LIB
+				cmd_device(0);
+				#else  // FTD2XX_LIB
 				cmd_device(0, 0);
+				#endif // FTD2XX_LIB
 
 			cmd_read_ip(optarg);
 			break;
 		case 3: // write info page
 			if (!spi_started)
+				#ifdef FTD2XX_LIB
+				cmd_device(0);
+				#else  // FTD2XX_LIB
 				cmd_device(0, 0);
+				#endif // FTD2XX_LIB
 
 			cmd_write_ip(optarg);
 			break;
 		case 4: // erase all
 			if (!spi_started)
+				#ifdef FTD2XX_LIB
+				cmd_device(0);
+				#else  // FTD2XX_LIB
 				cmd_device(0, 0);
+				#endif // FTD2XX_LIB
 
 			cmd_erase_all();
 			break;
@@ -487,4 +547,3 @@ int main(int argc, char *argv[])
 
 	return EXIT_SUCCESS;
 }
-
