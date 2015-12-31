@@ -49,7 +49,7 @@ We hook each pin of nRF24LE1 on FT232R as described:
 | nRF24LE1 | FT232R |
 |----------|--------|
 |   FCSN   |   RXD  |
-|   FMISO  |   RTS  |
+|   FMISO  |   RI   |
 |   FMOSI  |   CTS  |
 |   FSCK   |   DTR  |
 |   RESET  |   DSR  |
@@ -132,11 +132,17 @@ to nrf24le1_flasher:
 # nrf24le1_flasher -d 4-2 --read-ip ip_bkp.img
 ```
 
+If using FTD2XX-lib just use AVRDude-like selector:
+
+```
+# nrf24le1_flasher -d ft1 --read-ip ip_bkp.img
+```
+
 Another programmers/flashers
 ----------------------------
 
 There are some options over there, like a [kernel module][4] from Eder, a
-[Raspberry PI version][5] from Derek and an [Arduino programmer][6] from Dean.
+[Raspberry PI version][5] from Derek and an [Arduino programmer][6] from Dean or [from VolodinK][7].
 
 
 [1]: http://www.nordicsemi.com/eng/Products/2.4GHz-RF/nRF24LE1
@@ -145,4 +151,5 @@ There are some options over there, like a [kernel module][4] from Eder, a
 [4]: https://github.com/hltrd/nrf24le1
 [5]: https://github.com/derekstavis/nrf24le1-libbcm2835
 [6]: https://github.com/DeanCording/nRF24LE1_Programmer
+[7]: https://github.com/volodink/nrfFlasher
 
