@@ -14,6 +14,7 @@ SRCS = \
 
 HEADERS = \
 	src/hexfile.h \
+	src/main.h \
 	src/spi.h
 
 OBJS = $(SRCS:.c=.o)
